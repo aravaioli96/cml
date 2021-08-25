@@ -5,11 +5,13 @@ on: [push]
 jobs:
   run:
     runs-on: [ubuntu-latest]
-
+  
     steps:
       - uses: actions/checkout@v2
 
       - uses: iterative/setup-cml@v1
+
+      - uses: iterative/setup-dvc@v1
 
       - uses: actions/setup-python@v2
         with:
@@ -20,9 +22,19 @@ jobs:
           repo_token: ${{ secrets.REPO_TOKEN }}
           GDRIVE_CREDENTIALS_DATA: {"access_token": "ya29.a0ARrdaM_CuL9Sb6v3FtCbdhEMlKAQC_p4NPmflI-dG4ViGz7tn1djHF1J2ejupGyp8XtRBWutkujIrnZ42XHCgFeZHuYocbklcCt_BIRo79kFueHZUbEzRKagz2uWG_Xz_prQD3GCulp_0TFPRyf_TdZUJQsE", "client_id": "710796635688-iivsgbgsb6uv1fap6635dhvuei09o66c.apps.googleusercontent.com", "client_secret": "a1Fz59uTpVNeG_VGuSKDLJXv", "refresh_token": "1//09KopdFzlbD9LCgYIARAAGAkSNwF-L9IrRzNM_IWuuzXf7TAD7MZ0dWVoujOiY_4rsvNEPM3uxcd_G0z9kO_Zu7PYlsbHdX13SZg", "token_expiry": "2021-08-25T14:27:06Z", "token_uri": "https://oauth2.googleapis.com/token", "user_agent": null, "revoke_uri": "https://oauth2.googleapis.com/revoke", "id_token": null, "id_token_jwt": null, "token_response": {"access_token": "ya29.a0ARrdaM_CuL9Sb6v3FtCbdhEMlKAQC_p4NPmflI-dG4ViGz7tn1djHF1J2ejupGyp8XtRBWutkujIrnZ42XHCgFeZHuYocbklcCt_BIRo79kFueHZUbEzRKagz2uWG_Xz_prQD3GCulp_0TFPRyf_TdZUJQsE", "expires_in": 3599, "refresh_token": "1//09KopdFzlbD9LCgYIARAAGAkSNwF-L9IrRzNM_IWuuzXf7TAD7MZ0dWVoujOiY_4rsvNEPM3uxcd_G0z9kO_Zu7PYlsbHdX13SZg", "scope": "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.appdata", "token_type": "Bearer"}, "scopes": ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/drive.appdata"], "token_info_uri": "https://oauth2.googleapis.com/tokeninfo", "invalid": false, "_class": "OAuth2Credentials", "_module": "oauth2client.client"}
         run: |
-          pip3 install -r requirements.txt
-          python train.py
+          pip install -r requirements.txt
           
-          cat metrics.txt >> report.md
-          cml-publish confusion_matrix.png --md --title 'confusion-matrix' >> report.md
+          # Pull dataset with DVC 
+          dvc pull data
+          
+          # Reproduce pipeline if any changes detected in dependencies
+          dvc repro 
+          
+          # Use DVC metrics diff to compare metrics to master
+          git fetch --prune --unshallow
+          dvc metrics diff --show-md master >> report.md
+          
+          # Add figure to report
+          dvc plots diff --target loss.csv --show-vega master > vega.json
+          vl2png vega.json -s 1.3 | cml-publish --md >> report.md
           cml-send-comment report.md 
